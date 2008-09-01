@@ -1,8 +1,8 @@
 version 1.0
-*refactored all code
-*added localization file
-*changed separator on one comma (from double)
-*readonly access is can not only group, but user too
+* Refactored all code
+* Added localization file
+* Changed separator on one comma (from double)
+* Readonly access is can not only group, but user too
 
 version 0.8
 *Fixes for hook errors in MediaWiki 1.11.0 included
