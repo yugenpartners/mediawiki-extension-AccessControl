@@ -1,3 +1,6 @@
+version 1.1
+* Fixed security bug with accessibility on protected page over #REDIRECT
+
 version 1.0
 * Refactored all code
 * Added localization file

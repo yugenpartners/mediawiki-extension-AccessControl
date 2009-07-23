@@ -28,13 +28,12 @@ $wgAllowInfo = '';
 
 $wgExtensionFunctions[] = 'wfAccessControlExtension';
 $wgExtensionCredits['specialpage']['AccessControl'] = array(
-	'name'           => 'AccessControlExtension',
-	'svn-date' => '$LastChangedDate$',
-	'svn-revision' => '$LastChangedRevision$',
-	'author'         => array( 'Aleš Kapica' ),
-	'description'    => 'Group based access control on page based on original script by Martin Gondermann [ http://www.mediawiki.org/wiki/Extension:Group_Based_Access_Control | Extension:Group_Based_Access_Control ]',
-	'descriptionmsg' => 'accesscontrol-desc',
-	'url'            => 'http://www.mediawiki.org/wiki/Extension:AccessControl',
+	'name'			=> 'AccessControlExtension',
+	'author'		=> array( 'Aleš Kapica' ),
+	'url'			=> 'http://www.mediawiki.org/wiki/Extension:AccessControl',
+	'version'		=> '1.1',
+	'description'		=> 'Group based access control on page based on original script by Martin Gondermann [ http://www.mediawiki.org/wiki/Extension:Group_Based_Access_Control | Extension:Group_Based_Access_Control ]',
+	'descriptionmsg'	=> 'accesscontrol-desc',
 );
 
 
@@ -149,6 +148,7 @@ function makeGroupArray($input) {
 			$groups[$userGroup] = "read";
 		}
 	}
+
 	return $groups;
 }
 
@@ -202,10 +202,6 @@ function doRedirect($info) {
 	/* make redirection for non authorized users */
 	global $wgScript, $wgSitename, $wgOut;
 
-	//echo "<hr>doRedirect start <br>";
-	//print_r($info);
-	//echo "<br>doRedirect end<hr>";
-
 	if (!$info) $info="No_access";
 	if ($info == "Only_sysop") {
 		$target = wfMsg('accesscontrol-info-user');
@@ -218,6 +214,10 @@ function doRedirect($info) {
 	} else {
 		$target = wfMsg('accesscontrol-info-deny');
 	}
+	if (isset($_SESSION['redirect'])) {
+		// removing info about redirect from session after move..
+		unset($_SESSION['redirect']);
+	}
 	header("Location: ".$wgScript."/".$wgSitename.":".$target);
 }
 
@@ -228,8 +228,7 @@ function hookUserCan( &$title, &$wgUser, $action, &$result ) {
 	$article = new Article( $title, 0 );
 	$content = $article->getContent();
 	$allowedGroups = getContentTag($content);
-
-	if ($action=='read') {
+	if ($action == 'read') {
 		if (is_array($allowedGroups)) {
 			if ($allowedGroups['access'] != '') {
 				if($wgUser->mId == 0) {
@@ -265,7 +264,14 @@ function hookUserCan( &$title, &$wgUser, $action, &$result ) {
 					return true;
 				}
 			} else {
-				return false;
+				// Denied access on page protected with AccessControl over redirect
+				if (($wgUser->mId == 0) && (isset($_SESSION['redirect']))) {
+					doRedirect('No_anonymous');
+				} elseif($allowedGroups['access'] == '') {
+					doRedirect('No_access');
+				} else {
+					return false;
+				}
 			}
 	} elseif ($action=='move') {
 		if($wgUser->mId == 0) {
@@ -283,11 +289,17 @@ function allRightTags($string) {
 	$contenttag=Array();
 	$starttag = "<accesscontrol>";
 	$endtag = "</accesscontrol>";
+	$redirecttag = "redirect";
+
+	if ((mb_substr(trim($string), 0, 1) == "#") && (stripos(mb_substr(trim($string), 1, 9), $redirecttag) == "0")) {
+		$_SESSION['redirect'] = "";
+	}
+
 	$start = strpos( $string, $starttag );
-	if ($start != false) {
+	if ($start !== false) {
 		$start += strlen($starttag);
 		$end = strpos( $string, $endtag );
-		if ($end != false) {
+		if ($end !== false) {
 			$groupsString = substr($string, $start, $end-$start );
 			if (strlen($groupsString) == 0) {
 				$contenttag['end'] = strlen($starttag)+strlen($endtag); 
@@ -295,10 +307,19 @@ function allRightTags($string) {
 				$contenttag['groups']=$groupsString;
 				$contenttag['end'] = $end+strlen($endtag);
 			}
-			return $contenttag;
+
+			if(isset($_SESSION['redirect'])) {
+				$_SESSION['redirect'] = $contenttag;
+			} else {
+				return $contenttag;
+			}
 		}
 	} else {
-		return false;
+		if(isset($_SESSION['redirect'])) {
+			return $_SESSION['redirect'];
+		} else {
+			return false;
+			}
 	}
 }
 
@@ -311,14 +332,19 @@ function getContentTag($content) {
 		if(count($obsah)>1) {
 			$start = $obsah['end'];
 			} else {
-			//print "Jsem tu<hr>";
 			$start = 31;
 			}
 		if (isset($obsah['groups']) && strlen($groupsString) > 0) $groupsString .= ',';
 		$groupsString .= $obsah['groups'];
 		$content=substr($content, $start);
+		// If is setting redirect in session..
+		if (isset($_SESSION['redirect'])) {
+		    next;
+		    }
 	}
-	if(strlen($groupsString) == 0) return true;
+	if(strlen($groupsString) == 0) {
+	    return true;
+	    }
 	$groups = makeGroupArray($groupsString);
 	$message= accessControl($groups);
 	if ($message) {
@@ -361,6 +387,7 @@ function controlEditAccess(&$editpage) {
 				}
 			} elseif ($allowedGroups['access'] == 'read') {
 				// info for readonly access
+				echo "123 - zakazuji editaci..<br>";
 				return false;
 			} else {
 				// redirection anonymous user
