@@ -339,7 +339,7 @@ function getContentTag($content) {
 		$content=substr($content, $start);
 		// If is setting redirect in session..
 		if (isset($_SESSION['redirect'])) {
-		    next;
+		    continue;
 		    }
 	}
 	if(strlen($groupsString) == 0) {
