@@ -1,9 +1,11 @@
 {
-    "@metadata": {
-        "authors": [
-            "BeginaFelicysym"
-        ]
-    },
-    "accesscontrol-desc": "Włącza ograniczenia dostępu do stron dla grupy stronie wedle użytkowników",
-    "accesscontrol-info": "To jest strona chroniona!"
+	"@metadata": {
+		"authors": [
+			"BeginaFelicysym",
+			"Chrumps"
+		]
+	},
+	"accesscontrol-desc": "Włącza ograniczenia dostępu do stron dla grupy stronie wedle użytkowników",
+	"accesscontrol-info": "To jest strona zabezpieczona.",
+	"accesscontrol-info-box": "Ta MediaWiki wykorzystuje rozszerzenie [https://www.mediawiki.org/wiki/Extension:AccessControl AccessControl], która pozwala ograniczyć dostęp do witryny za pomocą zdefiniowanej przez użytkownika listy. Jeśli widzisz ten komunikat, nie masz dostępu do tej strony."
 }
