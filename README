@@ -1,0 +1,49 @@
+
+== Instalation == 
+For very very quick start add the following to LocalSettings.php:
+
+ wf
+
+
+== Config ==
+First you set allow action 'view' for all users:
+
+ $wgGroupPermissions['*']['read']            = true;
+
+An next deny access for unauthorized users for actions:
+
+ $wgGroupPermissions['*']['createaccount']   = false;
+ $wgGroupPermissions['*']['edit']            = false;
+ $wgGroupPermissions['*']['writeapi']        = false;
+ $wgGroupPermissions['*']['createpage'] = false;
+ $wgGroupPermissions['*']['createtalk'] = false;
+ $wgGroupPermissions['*']['edit'] = false;
+ $wgGroupPermissions['*']['createpage'] = false;
+
+ // If you have installed Extension:LookupUser
+ $wgGroupPermissions['*']['lookupuser'] = false;
+
+ // If you have installed Extension:ProofreadPage
+ $wgGroupPermissions['*']['pagetranslation'] = false;
+
+
+More documentation is at 
+ https://www.mediawiki.org/wiki/Help:Extension:AccessControl
+
+=== Global variables used by AccessControl ===
+; $wgAccessControlNamespaces : Array. By default is not set. Respectively use array <code>[ 0, 12, 13 ]</code>
+::0 - NS_MAIN
+::12 - NS_USER
+::13 - NS_USER_TALK
+
+== How to test ==
+1, Create first self-protect page and try access over link for authorized user, and next for anonymous user (is recommend use two browsers for it)
+
+2, Try access to self-protected page by redirect.
+
+3, Try access by transclusion self-protected page into another page
+
+4, Try create self-protect template and use it
+
+5, Try include page over DPL (if used it)
+

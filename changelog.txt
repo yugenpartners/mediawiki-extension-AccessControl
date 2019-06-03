@@ -1,6 +1,10 @@
 version 3.0-beta
 * Completly rewrited for templates support by Aleš Kapica
 * New syntax for accesslists
+* Used hook "ParserBeforeStrip" to secure content of pages included by DPL
+* Used hook "ModifyExportQuery" to protection page before export
+* New variables:
+    $wgAccessControlNamespaces
 
 version 2.6
 * Added support for PHP codesniffer checks, internal restructuring of code by Siebrand Mazeland

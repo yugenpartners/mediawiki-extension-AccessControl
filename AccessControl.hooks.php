@@ -2,6 +2,39 @@
 
 class AccessControlHooks {
 
+	public static function onParserBeforeStrip( &$parser, &$text, &$strip_state ) {
+		self::anonymousDeny();
+		$rights = self::allRightTags( $text );
+		if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
+			// without protection
+		} else {
+//			self::userVerify( $rights ) ;
+//			print_r('<!-- ');
+//			print_r( $rights );
+//			print_r(' -->');
+
+			switch (self::testRightsArray( $rights ) ) {
+				case 1 :
+					// edit allowed
+					break;
+				case 2 :
+					// read only allowed
+					self::readOnlyUser();
+					self::denyRead();
+					$text='{{int:accesscontrol-readonly}}' . $text;
+					break;
+				default :
+					// is false
+					self::readOnlyUser();
+					self::denyRead();
+					$text='{{int:accesscontrol-info}}';
+//					self::doRedirect( 'accesscontrol-redirect-users' );
+					break;
+			}
+
+		}
+	}
+
 	public static function onModifyExportQuery( $db, &$tables, &$cond, &$opts, &$join  ) {
 		global $wgQueryPages;
 		/*
@@ -33,15 +66,15 @@ class AccessControlHooks {
 
 
 	public static function accessControlExtension( Parser $parser ) {
-		/* This the hook function adds the tag <accesscontrol> to the wiki parser */
+		// This the hook function adds the tag <accesscontrol> to the wiki parser
 		$parser->setHook( 'accesscontrol', [ 'AccessControlHooks', 'doControlUserAccess' ] );
 		return true;
 	}
 
 
-	/* Zobrazuje se pouze když je to nastavené přes tag */
+	// Zobrazuje se pouze když je to nastavené přes tag
 	public static function doControlUserAccess( $input, array $args, Parser $parser, PPFrame $frame ) {
-		/* Function called by accessControlExtension */
+		// Function called by accessControlExtension
 		return self::displayGroups();
 	}
 
@@ -106,6 +139,31 @@ class AccessControlHooks {
 		return $target;
 	}
 
+	public static function testRightsArray ( $rights ) {
+		global $wgUser, $wgAdminCanReadAll;
+		if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
+			/* stránka je bez ochrany */
+			return 1;
+		}
+		if ( in_array( 'sysop', $wgUser->getGroups(), true ) ) {
+			if ( isset( $wgAdminCanReadAll ) ) {
+				if ( $wgAdminCanReadAll ) {
+					/* admin může vše */
+					return 1;
+				}
+			}
+		}
+		if ( array_key_exists( $wgUser->mName, $rights['editors'] ) || array_key_exists( $wgUser->mName, $rights['visitors'] ) ) {
+			if ( array_key_exists( $wgUser->mName, $rights['editors'] ) && $rights['editors'][$wgUser->mName] ) {
+				return 1;
+			} else {
+				/* uživatel může číst obsah */
+				return 2;
+			}
+		} else {
+			return false;
+		}
+	}
 
 	public static function controlExportPage( $string = "page_namespace=0 AND page_title='test-protectbyoption'") {
 		/* "page_namespace=8 AND page_title='fuckoff'" */
@@ -242,7 +300,6 @@ class AccessControlHooks {
 					}
 				}
 //print_r($allow);
-//TODO
 			}
 		}
 		return $allow;
@@ -301,8 +358,7 @@ class AccessControlHooks {
 
 
 	public static function parseOldList( $content ) {
-	    /* Parsování seznamu starého typu */
-		/* Extracts the allowed users from the userspace access list */
+		/* Extracts the users from the userspace access list by the old syntax */
 		$allow = [];
 		$usersAccess = explode( "\n", $content );
 		foreach ( $usersAccess as $userEntry ) {
@@ -381,7 +437,7 @@ class AccessControlHooks {
 
 
 	public static function getContentPageNew( $title, $ns ) {
-	    /* Vrací pole nového typu, které obsahuje visitors a editors */
+		/* Return array with two keys: visitors and editors */
 		$content = self::getContentPage( $ns, $title );
 		if ( strpos( $content, '* ' ) === 0 ) {
 			$array = self::parseOldList( $content );
@@ -437,13 +493,15 @@ class AccessControlHooks {
 	public static function allRightTags( $string ) {
 		global $wgAccessControlNamespaces;
 
+		/* Set default value for $wgAccessControlNamespaces */
 		if (is_array($wgAccessControlNamespaces)) {
 			// if is set
 		} else {
 			$wgAccessControlNamespaces = [ 0, 2, 13 ];
 		}
 
-		// redirect control
+//print_r($string);
+		/* Redirect */
 		preg_match(
 			'/\#REDIRECT +\[\[(.*?)[\]\]|\|]/i',
 			$string,
@@ -456,7 +514,7 @@ class AccessControlHooks {
 				$rights = self::allRightTags( self::getContentPage( $array['ns'], $array['title'] ) );
 				self::anonymousDeny();
 				self::userVerify($rights);
-//				print_r($content);
+//print_r($rights);
 			}
 		}
 
@@ -468,8 +526,9 @@ class AccessControlHooks {
 			PREG_PATTERN_ORDER
 			);
 		foreach( $matches[0] as $pattern ) {
+			/* Transclusions of page, which is not from template namespace */
 			if ( substr( $pattern, 0, 3 ) === '{{:' ) {
-				// transclusion page or template
+				// transclusion any page
 				preg_match(
 					'/\{\{:(.*?)[\}\}|\|]/',
 					$pattern,
@@ -482,19 +541,33 @@ class AccessControlHooks {
 						$rights = self::allRightTags( self::getContentPage( $array['ns'], $array['title'] ) );
 						self::anonymousDeny();
 						self::userVerify($rights);
-						//print_r($rights);
+//print_r($rights);
 					}
+				}
+			}
+			/* Template transclusion */
+			if ( substr( $pattern, 0, 2 ) === '{{' ) {
+				// transclusion template
+				preg_match(
+					'/\{\{(.*?)[\}\}|\|]/',
+					$pattern,
+					$include,
+					PREG_UNMATCHED_AS_NULL
+					);
+				if ($include) {
+					$rights = self::allRightTags( self::getContentPage( 10, trim($include[1]) ) );
+					self::anonymousDeny();
+					self::userVerify($rights);
+//print_r($rights);
 				}
 			}
 
 			switch ( substr( mb_strtolower( $pattern, 'UTF-8' ), 0, 15 ) ) {
 				case '<accesscontrol>' :
-					// protection by tag
+					/* Protected by tag */
 					$allow = self::earlySyntaxOfRights( trim(str_replace( '</accesscontrol>', '', str_replace( '<accesscontrol>', '', $pattern ) ) ) );
-					/* tento kontrolní výpis se zobrazí
-					    jen pokud je stránka chráněna
-					    tagem accesscontrol */
-//					print_r($allow);
+/* Array of members is based by content of the element accesscontrol */
+//print_r($allow);
 					break;
 				default :
 					if (
@@ -504,9 +577,7 @@ class AccessControlHooks {
 						strpos( $pattern, 'readOnlyAllowedGroups') ||
 						strpos( $pattern, 'editAllowedGroups')
 					   ) {
-						/* fullstring */
-//						print_r($wgPageName);
-//						print_r($pattern);
+						/* Protected by options */
 						$options = explode( '|', $pattern );
 						foreach ( $options as $string ) {
 							if ( is_integer( strpos( $string, 'isProtectedBy' ) ) ) {
@@ -514,11 +585,8 @@ class AccessControlHooks {
 								$groups = self::membersOfGroup($string);
 								if ( array_key_exists( 'isProtectedBy', $groups) ) {
 									foreach ( $groups['isProtectedBy'] as $group ) {
-/* Zpracování externích seznamů. Ty se mohou nacházet ve jmenném prostoru 0, 2 a v uživatelsky definovaném jmenném prostoru */
-//print_r('start-');
 										foreach ($wgAccessControlNamespaces as $ns) {
 											$array = self::getContentPageNew( $group, $ns);
-//print_r($array);
 											if ( array_key_exists( 'editors', $array) ) {
 												foreach( array_keys($array['editors']) as $user) {
 													$allow['editors'][$user] = true;
@@ -530,25 +598,16 @@ class AccessControlHooks {
 												}
 											}
 										}
-//print_r('end-');
 									}
 								}
+/* isProtectedBy */
 //print_r($allow);
 							}
 							if ( strpos ( $string, 'readOnlyAllowedUsers' ) || strpos ( $string, 'readOnlyAllowedGroups' ) ) {
-								/* readonly access  */
+								/* readonly access - stronger then rights from isProtectedby */
 								$readers = self::membersOfGroup($string);
-//print_r($readers);
 								if ( array_key_exists( 'readOnlyAllowedGroups', $readers ) ) {
-									/* Všichni uživatelé z této skupiny mohou pouze číst
-									    Tento parametr přebíjí nastavení z isProtectedBy.
-									    Tzn. že i když by jinak měl uživatel právo k editaci,
-									    tato lokální volba ho přebije
-									*/
 									foreach( $readers['readOnlyAllowedGroups'] as $group ) {
-/* kontrolní výpis skupiny v poli $group*/
-//										print_r($group);
-										/* seznamy se mohou vyskytovat ve více jmenných prostorech */
 										foreach ($wgAccessControlNamespaces as $ns) {
 											$array = self::getContentPageNew( $group, $ns);
 											if ( array_key_exists( 'editors', $array) ) {
@@ -564,18 +623,11 @@ class AccessControlHooks {
 											}
 										}
 									}
-/* kontrolní výpis stavu pole $allow */
-//									print_r($allow);
 								}
-								if ( array_key_exists( 'readOnlyAllowedUsers', $readers ) ) {
-									/* Nastavení práva pro čtení na uživatele
-									    Pokud měl uživatel nastaveno právo k editaci přes isProtectedBy,
-									    tak je mu natvrdo vypnuto
-									*/
-									foreach( $readers['readOnlyAllowedUsers'] as $user ) {
-/* kontrolní výpis uživatele v poli $user*/
-//										print_r($user);
+/*  readOnlyAllowedGroups */
 //print_r($allow);
+								if ( array_key_exists( 'readOnlyAllowedUsers', $readers ) ) {
+									foreach( $readers['readOnlyAllowedUsers'] as $user ) {
 										if ( array_key_exists('editors', $allow) ) {
 											if ( array_key_exists( $user, $allow['editors'] ) ) {
 												/* vypínám právo k editaci */
@@ -588,24 +640,13 @@ class AccessControlHooks {
 									}
 								}
 							}
-/* kontrolní výpis stavu pole $allow - v tuto chvíli je natvrdo změněno právo ke stránce na ReadOnly */
-//							print_r($allow);
-// seznam uživatelů s právem k editaci - umožňuje převalit volbu ze seznamů
+/* readOnlyAllowedUsers */
+//print_r($allow);
 							if ( strpos ( $string, 'editAllowedUsers' ) || strpos ( $string, 'editAllowedGroups' ) ) {
-								/* edit access  */
+								/* edit access - stronger then rights from isProtectedby, and rights from readonly options */
 								$editors = self::membersOfGroup($string);
 								if ( array_key_exists( 'editAllowedGroups', $editors ) ) {
-									/* Všichni uživatelé z této skupiny mohou stránku editovat
-									    I přes to, že mají na původním seznamu pouze právo číst
-									    Tento parametr přebíjí i nastavení z isProtectedBy.
-									    Takže i když by jinak měl uživatel pouze právo ke čtení,
-									    tahle lokální volba mu nastaví právo k editaci.
-									*/
-								    /* seznam skupin uživatelů, je třeba poslat dotaz */
 									foreach( $editors['editAllowedGroups'] as $group ) {
-/* kontrolní výpis skupiny v poli $group*/
-//										print_r($group);
-										/* seznamy se mohou vyskytovat ve více jmenných prostorech */
 										foreach ($wgAccessControlNamespaces as $ns) {
 											$array = self::getContentPageNew( $group, $ns);
 											if ( array_key_exists( 'visitors', $array) ) {
@@ -625,11 +666,10 @@ class AccessControlHooks {
 							}
 							/* ignore other options or params */
 						}
-/* Kontrolní výpis, který se zobrazuje jen pokud se řeší parametry šablony */
+/* Array of rights is set by template options */
 // print_r($allow);
 					} elseif ( strpos( $pattern, 'accesscontrol') > 0 ) {
-						/* Test first item of template with accesscontrol string
-						    in name - it is same alternative without tag */
+						/* Test first item of template with accesscontrol string in name - it is same alternative without tag */
 						$retezec = trim( substr( $pattern, strpos( $pattern, '|' ) + 1 ) );
 						if ( strpos( $retezec, '|' ) ) {
 							$members = trim( substr( $retezec, 0, strpos( $retezec, '|' ) ) );
@@ -639,26 +679,44 @@ class AccessControlHooks {
 							}
 						}
 						if ( !strpos( $members, '=') ) {
-							// {{Nějaká šablona accesscontrol | isProtectedByseznam_uživatelů, userA, userB | option = … }}
+							/* {{Someone template name with accesscontrol string | accesslist_X, userA, userB | option = … }} */
 							$allow = self::earlySyntaxOfRights( $members );
-					/* tento kontrolní výpis se zobrazí jen pokud je stránka chráněna
-					    šablonou, která obsahuje v názvu řetězec accesscontrol.
-					    jako seznam je akceptován pouze první parametr šablony */
-//						print_r($allow);
-						} else {
-							// nejsou
 						}
-// tento kontrolní výpis se zobrazí jen pokud šablona obsahuje některý z parametrů, co řeší accesscontrol
+/* Array of members is generated by first parameter of template with accesscontrol string in name */
 // print_r($allow);
 					}
 			}
 		}
-		/* Funkce vrací pole uživatelů, které má 2 klíče
-		    editors - uživatelé co mohou vše
-		    visitors - uživatelé co mohou stránku jen číst
-		*/
+	/* Array has 2 keys with arays of:
+	    editors - member can do all (if have value true)
+	    visitors - member can do only read
+	*/
 //		print_r($allow);
 		return $allow;
+	}
+
+	public static function denyRead() {
+		/* User is denied */
+		global $wgActions, $wgUser;
+
+		$wgActions['view'] = false;
+	}
+
+	public static function readOnlyUser() {
+		/* User is anonymous - deny rights */
+		global $wgActions, $wgUser;
+
+		$wgActions['edit'] = false;
+		$wgActions['history'] = false;
+		$wgActions['submit'] = false;
+		$wgActions['info'] = false;
+		$wgActions['raw'] = false;
+		$wgActions['delete'] = false;
+		$wgActions['revert'] = false;
+		$wgActions['revisiondelete'] = false;
+		$wgActions['rollback'] = false;
+		$wgActions['markpatrolled'] = false;
+		$wgActions['formedit'] = false;
 	}
 
 
@@ -704,7 +762,6 @@ class AccessControlHooks {
 					}
 				}
 			}
-//print_r( array_key_exists( $wgUser->mName, $rights['editors'] ) );
 			if ( array_key_exists( 'editors', $rights ) ) {
 				if ( array_key_exists( $wgUser->mName, $rights['editors'] ) ) {
 					if ( $rights['editors'][$wgUser->mName] ) {
@@ -712,19 +769,8 @@ class AccessControlHooks {
 					}
 				}
 			}
-//print_r( array_key_exists( $wgUser->mName, $rights['editors'] ) );
 			if ( array_key_exists( 'visitors' , $rights ) ) {
-				$wgActions['edit'] = false;
-				$wgActions['history'] = false;
-				$wgActions['submit'] = false;
-				$wgActions['info'] = false;
-				$wgActions['raw'] = false;
-				$wgActions['delete'] = false;
-				$wgActions['revert'] = false;
-				$wgActions['revisiondelete'] = false;
-				$wgActions['rollback'] = false;
-				$wgActions['markpatrolled'] = false;
-				$wgActions['formedit'] = false;
+				self::readOnlyUser();
 				if ( array_key_exists( $wgUser->mName, $rights['editors'] ) || array_key_exists( $wgUser->mName, $rights['visitors'] ) ) {
 					if ( $rights['visitors'][$wgUser->mName] ) {
 						return true;
@@ -742,7 +788,7 @@ class AccessControlHooks {
 
 
 	public static function onUserCan( &$title, &$wgUser, $action, &$result ) {
-		/* Main function control access for all users */
+		// Main function control access for all users
 
 		self::anonymousDeny();
 		self::controlExportPage();
@@ -754,6 +800,7 @@ class AccessControlHooks {
 			)
 		);
 		self::userVerify($rights);
+
 	}
 
 }

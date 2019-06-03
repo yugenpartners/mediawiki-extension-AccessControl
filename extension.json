@@ -33,6 +33,7 @@
 		"ModifyExportQuery": "AccessControlHooks::onModifyExportQuery",
 		"ParserFirstCallInit": "AccessControlHooks::accessControlExtension",
 		"userCan": "AccessControlHooks::onUserCan",
+		"ParserBeforeStrip": "AccessControlHooks::onParserBeforeStrip",
 		"UnknownAction": "AccessControlHooks::onUnknownAction"
 	},
 	"manifest_version": 2
