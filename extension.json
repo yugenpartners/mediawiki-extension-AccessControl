@@ -34,7 +34,8 @@
 		"ParserFirstCallInit": "AccessControlHooks::accessControlExtension",
 		"userCan": "AccessControlHooks::onUserCan",
 		"ParserBeforeStrip": "AccessControlHooks::onParserBeforeStrip",
-		"UnknownAction": "AccessControlHooks::onUnknownAction"
+		"ShowSearchHit": "AccessControlHooks::onShowSearchHit",
+		"GetDifferenceEngine": "AccessControlHooks::onGetDifferenceEngine"
 	},
 	"manifest_version": 2
 }

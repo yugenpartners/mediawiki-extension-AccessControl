@@ -2,45 +2,96 @@
 
 class AccessControlHooks {
 
+	private static function printDebug( $input ) {
+		print_r('<!-- ');
+		print_r($input);
+		print_r(' -->
+');
+	}
+
+	public static function onGetDifferenceEngine( $context, $old, $new, $refreshCache, $unhide, &$differenceEngine ) {
+		/* Over diff anonymous user see content of revisions i.e.:
+		 https://www.example.org/wiki/index.php?title=blabla&diff=5000
+		 return diff form cache, if exists. For it is important active
+		 redirection for anonymous users */
+		global $wgUser;
+		self::printDebug( microtime(true) . ' onGetDifferenceEngine' );
+
+		if ( $wgUser->mId === 0 ) {
+			// Redirect don't destroy the result of diff!
+			self::doRedirect( 'accesscontrol-redirect-anonymous' );
+		}
+	}
+
+	public static function onShowSearchHit( $searchPage, $result, $terms, &$link, &$redirect, &$section, &$extract, &$score, &$size, &$date, &$related, &$html ) {
+// START
+//	$start = microtime(true);
+		if ($result) {
+			$page = $result->getTitle();
+			$content = self::getContentPage( $page->mNamespace, $page->mTextform );
+
+			$rights = self::allRightTags( $content );
+			if ( !( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) ) {
+				switch (self::testRightsArray( $rights ) ) {
+					case 1 :
+					case 2 :
+						break;
+					default :
+						// is false
+						$extract = wfMessage( 'accesscontrol-actions-deny' )->text();
+						break;
+				}
+			}
+		}
+// END
+//	self::printDebug( $start . ' onShowSearchHit' . ' title="' . $page->mTextform . '" ns="' . $page->mNamespace . '" + ' . (microtime(true) - $start ) );
+	}
+
+
 	public static function onParserBeforeStrip( &$parser, &$text, &$strip_state ) {
+		global $wgVerifyPage;
+		if (is_array($wgVerifyPage)) {
+			if ( array_key_exists(  $parser->getRevisionId(), $wgVerifyPage ) ) {
+				return true;
+			}
+		}
+// START
+//	$start = microtime(true) ;
 		self::anonymousDeny();
 		$rights = self::allRightTags( $text );
-		if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
-			// without protection
-		} else {
-//			self::userVerify( $rights ) ;
-//			print_r('<!-- ');
-//			print_r( $rights );
-//			print_r(' -->');
-
+		if ( ! ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) ) {
 			switch (self::testRightsArray( $rights ) ) {
 				case 1 :
 					// edit allowed
+					$wgVerifyPage[ $parser->getRevisionId() ] = true;
 					break;
 				case 2 :
 					// read only allowed
 					self::readOnlyUser();
 					self::denyRead();
 					$text='{{int:accesscontrol-readonly}}' . $text;
+					$wgVerifyPage[ $parser->getRevisionId() ] = false;
 					break;
 				default :
 					// is false
 					self::readOnlyUser();
 					self::denyRead();
 					$text='{{int:accesscontrol-info}}';
-//					self::doRedirect( 'accesscontrol-redirect-users' );
+					self::doRedirect( 'accesscontrol-redirect-users' );
+					$wgVerifyPage[ $parser->getRevisionId() ] = false;
 					break;
 			}
-
 		}
+// END
+//	self::printDebug( $start . ' onParserBeforeStrip ' . $parser->getTitle() .' + ' . ( microtime(true) - $start ) );
 	}
 
 	public static function onModifyExportQuery( $db, &$tables, &$cond, &$opts, &$join  ) {
 		global $wgQueryPages;
-		/*
-		    If is page protected, do skip and if user has only read
-		    access, return only last revisioni - without history
-		*/
+		/* If is page protected, do skip and if user has only read
+		    access, return only last revisioni - without history */
+// START
+//	$start = microtime(true);
 		switch ( self::controlExportPage( $cond ) ) {
 			case 1 :
 				break;
@@ -51,22 +102,15 @@ class AccessControlHooks {
 				$opts['LIMIT'] = 0;
 				break;
 		}
-	}
-
-
-	public static function onUnknownAction( $action, Page $article ) {
-		global $wgOut;
-		switch ( $action ) {
-			default:
-				$wgOut->setPageTitle( $article->getTitle() . "->" . $action );
-				$wgOut->addWikiText( wfMessage( 'accesscontrol-actions-deny' )->text() );
-		}
-		return false;
+// END
+//	self::printDebug( $start . ' onModifyExportQuery ' . $cond . ' + ' . ( microtime(true) - $start ) );
 	}
 
 
 	public static function accessControlExtension( Parser $parser ) {
 		// This the hook function adds the tag <accesscontrol> to the wiki parser
+// START-END
+//	self::printDebug( microtime(true) . ' accessControlExtension' );
 		$parser->setHook( 'accesscontrol', [ 'AccessControlHooks', 'doControlUserAccess' ] );
 		return true;
 	}
@@ -74,16 +118,19 @@ class AccessControlHooks {
 
 	// Zobrazuje se pouze když je to nastavené přes tag
 	public static function doControlUserAccess( $input, array $args, Parser $parser, PPFrame $frame ) {
+// START-END
+//	self::printDebug( microtime(true) . ' doControlUserAccess' );
 		// Function called by accessControlExtension
 		return self::displayGroups();
 	}
 
 
 	// info about protection
-	public static function displayGroups() {
-		/** Function replace the tag <accesscontrol> and his content,
-		 * behind info about a protection this the page
-		 */
+	private static function displayGroups() {
+		/* Function replace the tag <accesscontrol> and his content,
+		    behind info about a protection this the page */
+//START-END
+//	self::printDebug( microtime(true) . ' displayGroups' );
 		$style = "<p id=\"accesscontrol\" style=\"text-align:center;color:#BA0000;font-size:8pt\">";
 		$text = wfMessage( 'accesscontrol-info' )->text();
 		$style_end = "</p>";
@@ -92,7 +139,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function getAccessListCanonicalTarget( $title, $namespace = 0 ) {
+	private static function getAccessListCanonicalTarget( $title, $namespace = 0 ) {
 		/* Function return by default array as [ 'title', 0 ] i.e. */
 		global $wgContLang;
 		$target = [];
@@ -139,7 +186,7 @@ class AccessControlHooks {
 		return $target;
 	}
 
-	public static function testRightsArray ( $rights ) {
+	private static function testRightsArray ( $rights ) {
 		global $wgUser, $wgAdminCanReadAll;
 		if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
 			/* stránka je bez ochrany */
@@ -165,7 +212,7 @@ class AccessControlHooks {
 		}
 	}
 
-	public static function controlExportPage( $string = "page_namespace=0 AND page_title='test-protectbyoption'") {
+	private static function controlExportPage( $string = "page_namespace=0 AND page_title='test-protectbyoption'") {
 		/* "page_namespace=8 AND page_title='fuckoff'" */
 		global $wgUser;
 		if ( $wgUser->mId === 0 ) {
@@ -184,19 +231,23 @@ class AccessControlHooks {
 				$match[2]
 			) );
 			if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
-				/* stránka je bez ochrany */
+				/* page is free */
 				return 1;
 			}
 			if ( in_array( 'sysop', $wgUser->getGroups(), true ) ) {
 				if ( isset( $wgAdminCanReadAll ) ) {
 					if ( $wgAdminCanReadAll ) {
-						/* admin může vše */
+						/* admin can be all */
 						return 1;
 					}
 				}
 			}
+			if ( empty($wgUser->mName) ) {
+				// for anonymous query by api is empty
+				return false;
+			}
 			if ( array_key_exists( $wgUser->mName, $rights['editors'] ) || array_key_exists( $wgUser->mName, $rights['visitors'] ) ) {
-				/* uživatel může číst obsah */
+				/* readonly user */
 				return 2;
 			} else {
 				return false;
@@ -205,7 +256,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function oldSyntaxTest( $retezec ) {
+	private static function oldSyntaxTest( $retezec ) {
 		/* Blok kvůli staré syntaxi. uživatel, nebo členové
 		    skupiny budou mít automaticky pouze readonly
 		    přístup, pokud je přítomen za jménem, či jménem
@@ -222,7 +273,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function earlySyntaxOfRights( $string ) {
+	private static function earlySyntaxOfRights( $string ) {
 		global $wgAccessControlNamespaces, $wgUser;
 		/* u staršího typu syntaxe se mohly vyskytnout zároveň
 		- nejprve test uživatelské skupiny MediaWiki
@@ -245,8 +296,8 @@ class AccessControlHooks {
 					$array = self::getContentPageNew( $item[0], $ns);
 //print_r($array);
 					if ( empty($array) ) {
-
 						foreach ( $MWgroups as $mwgroup ) {
+
 							if ( $item[0] === $mwgroup ) {
 								foreach ( $wgUser->getEffectiveGroups() as $group ) {
 									if ( $group === $item[0] ) {
@@ -306,7 +357,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function testRightsOfMember( $member ) {
+	private static function testRightsOfMember( $member ) {
 		/* Na vstupu je řetězec se jménem uživatele, nebo uživatelské skupiny
 		    na výstupu je pole s aktuálním nastavením práv
 		    [ userA = false, userB = 'read', userC = 'edit']
@@ -333,7 +384,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function membersOfGroup( $string ) {
+	private static function membersOfGroup( $string ) {
 		$output = [];
 		$array = explode( '=', $string);
 		if ( $array[1] ) {
@@ -357,7 +408,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function parseOldList( $content ) {
+	private static function parseOldList( $content ) {
 		/* Extracts the users from the userspace access list by the old syntax */
 		$allow = [];
 		$usersAccess = explode( "\n", $content );
@@ -380,7 +431,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function parseNewList( $content ) {
+	private static function parseNewList( $content ) {
 		$allow = [];
 		$usersAccess = explode( "|", $content);
 		if ( is_array($usersAccess) ) {
@@ -436,7 +487,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function getContentPageNew( $title, $ns ) {
+	private static function getContentPageNew( $title, $ns ) {
 		/* Return array with two keys: visitors and editors */
 		$content = self::getContentPage( $ns, $title );
 		if ( strpos( $content, '* ' ) === 0 ) {
@@ -448,8 +499,23 @@ class AccessControlHooks {
 	}
 
 
-	public static function getContentPage( $namespace, $title ) {
+	private static function getContentPage( $namespace, $title ) {
 		/* Function get content the page identified by title object from database */
+		global $wgVerifyPage;
+		if ( is_integer( strpos( $title, '{' ) ) ) {
+			// remove templates
+			return '';
+		}
+		if ( is_integer( strpos( $title, '#' ) ) ) {
+			// remove functions
+			return '';
+		}
+		// remove magic keys
+		//TODO
+//self::printDebug( $title );
+
+//START
+//	$start = microtime(true);
 		$gt = Title::makeTitle( $namespace, $title );
 		if ( $gt->isSpecialPage() ) {
 			// Can't create WikiPage for special page
@@ -458,12 +524,21 @@ class AccessControlHooks {
 		// Article::fetchContent() is deprecated.
 		// Replaced by WikiPage::getContent()
 		$page = WikiPage::factory( $gt );
+		$latestid = $page->getLatest();
 		$content = ContentHandler::getContentText( $page->getContent() );
+
+		if ( is_array($wgVerifyPage) ) {
+			if ( ! array_key_exists( $latestid, $wgVerifyPage ) ) {
+				$wgVerifyPage[ $latestid ] = true;
+			}
+		}
+//END
+//	self::printDebug( $start . ' getContentPage' . ' title="' . $title . '" ns="' . $namespace . '" + ' . ( microtime(true) - $start ) );
 		return $content;
 	}
 
 
-	public static function isUser( $user ) {
+	private static function isUser( $user ) {
 		$title = Title::newFromText( $user, NS_USER );
 		if ( $title !== null ) {
 			return true;
@@ -472,7 +547,7 @@ class AccessControlHooks {
 
 
 	/* Přesměrování nežádoucího uživatele */
-	public static function doRedirect( $info ) {
+	private static function doRedirect( $info ) {
 		/* make redirection for non authorized users */
 		global $wgScript, $wgSitename, $wgOut, $wgAccessControlRedirect;
 		if ( !$info ) {
@@ -490,7 +565,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function allRightTags( $string ) {
+	private static function allRightTags( $string ) {
 		global $wgAccessControlNamespaces;
 
 		/* Set default value for $wgAccessControlNamespaces */
@@ -545,6 +620,46 @@ class AccessControlHooks {
 					}
 				}
 			}
+			if ( substr( $pattern, 0, 3 ) === '{{{' ) {
+				preg_match(
+					'/\{\{\{(.*?)\}\}\}/',
+					$pattern,
+					$include,
+					PREG_UNMATCHED_AS_NULL
+					);
+				if ($include) {
+					switch ( $include[1] ) {
+						case ( preg_match( "/^[0-9]/", $include[1] ) ? true : false ) :
+							// číslovaná proměnná
+//							self::printDebug($include);
+							break;
+						case ( preg_match( "/\|/", $include[1] ) ? true : false ) :
+							// parametrizovaná šablona
+//							self::printDebug($include);
+							break;
+						default:
+//							self::printDebug($include);
+//							break;
+					}
+				}
+			}
+			if ( substr( $pattern, 0, 3 ) === '{{#' ) {
+				preg_match(
+					'/\{\{\#(.*?)\}\}/',
+					$pattern,
+					$include,
+					PREG_UNMATCHED_AS_NULL
+					);
+				if ($include) {
+					switch ( $include[1] ) {
+						case ( preg_match( "/^[a-z]+/i", $include[1] ) ? true : false ) :
+							// interní funkce
+//							self::printDebug($include);
+							break;
+					}
+				}
+			}
+
 			/* Template transclusion */
 			if ( substr( $pattern, 0, 2 ) === '{{' ) {
 				// transclusion template
@@ -561,7 +676,6 @@ class AccessControlHooks {
 //print_r($rights);
 				}
 			}
-
 			switch ( substr( mb_strtolower( $pattern, 'UTF-8' ), 0, 15 ) ) {
 				case '<accesscontrol>' :
 					/* Protected by tag */
@@ -695,14 +809,14 @@ class AccessControlHooks {
 		return $allow;
 	}
 
-	public static function denyRead() {
+	private static function denyRead() {
 		/* User is denied */
 		global $wgActions, $wgUser;
 
 		$wgActions['view'] = false;
 	}
 
-	public static function readOnlyUser() {
+	private static function readOnlyUser() {
 		/* User is anonymous - deny rights */
 		global $wgActions, $wgUser;
 
@@ -720,7 +834,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function anonymousDeny() {
+	private static function anonymousDeny() {
 		/* User is anonymous - deny rights */
 		global $wgActions, $wgUser;
 
@@ -742,7 +856,7 @@ class AccessControlHooks {
 	}
 
 
-	public static function userVerify( $rights ) {
+	private static function userVerify( $rights ) {
 		/* User is logged */
 		global $wgUser, $wgActions, $wgAdminCanReadAll;
 
@@ -788,7 +902,17 @@ class AccessControlHooks {
 
 
 	public static function onUserCan( &$title, &$wgUser, $action, &$result ) {
+		global $wgVerifyPage;
+		if (is_array($wgVerifyPage)) {
+			if ( array_key_exists( $title->getLatestRevID(), $wgVerifyPage ) ) {
+				return true;
+			}
+		} else {
+			$wgVerifyPage = [];
+		}
 		// Main function control access for all users
+//START
+//	$start = microtime(true);
 
 		self::anonymousDeny();
 		self::controlExportPage();
@@ -799,8 +923,11 @@ class AccessControlHooks {
 				$title->mDbkeyform
 			)
 		);
+		$wgVerifyPage[$title->getLatestRevID()] = true;
 		self::userVerify($rights);
-
+//END
+//	print_r($wgVerifyPage);
+//	self::printDebug( $start . ' onUserCan' . ' title="' . $title->mTextform . '" ns="' . $title->mNamespace . '" + ' . ( microtime(true) - $start ) );
 	}
 
 }

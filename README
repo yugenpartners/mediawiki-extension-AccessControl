@@ -2,8 +2,7 @@
 == Instalation == 
 For very very quick start add the following to LocalSettings.php:
 
- wf
-
+ wfLoadExtension( 'AccessControl' )
 
 == Config ==
 First you set allow action 'view' for all users:
@@ -27,6 +26,116 @@ An next deny access for unauthorized users for actions:
  $wgGroupPermissions['*']['pagetranslation'] = false;
 
 
+CAUTION: Is strictly recommend set deny access for allmost of Special
+         pages for anonymous users! I use for it function
+         disableSomeSpecialPages() in my LocalSettings.php file. See:
+
+…
+ function disableSomeSpecialPages(&$list) {
+     global $wgUser;
+
+     if ( is_array( $wgUser->mRights ) && in_array( 'createpage', $wgUser->mRights ) ) {
+         return true;
+     } else {
+         if ($wgUser->mId > 0 ) {
+             return true;
+         }
+         unset($list['Mypage']);
+         foreach( array(
+             'Activeusers',
+             'Allmessages',
+             'Allpages',
+             'Ancientpages',
+             'ApiSandbox',
+             'Blankpage',
+             'BlockList',
+             'Boilerplates',
+             'Booksources',
+             'BrokenRedirects',
+             'CategoryTree',
+             'ComparePages',
+             'Contributions',
+             'CreateCategory',
+             'CreateClass',
+             'CreateForm',
+             'CreateTemplate',
+             'Deadendpages',
+             'DoubleRedirects',
+             'ExpandTemplates',
+             'Export',
+             'ExportTranslations',
+             'Fewestrevisions',
+             'FileDuplicateSearch',
+             'Forms',
+             'FormEdit',
+             'FormStart',
+             'LanguageStats',
+             'LinkSearch',
+             'ListDuplicatedFiles',
+             'Listfiles',
+             'Listgrouprights',
+             'Listredirects',
+             'Listusers',
+             'Log',
+             'Lonelypages',
+             'Longpages',
+             'ManageMessageGroups',
+             'MediaStatistics',
+             'MessageGroupStats',
+             'MIMEsearch',
+             'Mostcategories',
+             'Mostimages',
+             'Mostinterwikis',
+             'Mostlinked',
+             'Mostlinkedcategories',
+             'Mostlinkedtemplates',
+             'Mostrevisions',
+             'Movepage',
+             'MultiPageEdit',
+             'Newimages',
+             'Newpages',
+             'PagesWithProp',
+             'PagesWithoutScans',
+             'PageTranslation',
+             'Preferences',
+             'Prefixindex',
+             'Protectedpages',
+             'Protectedtitles',
+             'RandomInCategory',
+             'Randompage',
+             'Randomredirect',
+             'Redirect',
+             'ResetTokens',
+             'RunQuery',
+             'SearchTranslations',
+             'Shortpages',
+             'Statistics',
+             'SupportedLanguages',
+             'TrackingCategories',
+             'Translate',
+             'Translations',
+             'TranslationStats',
+             'TranslationStash',
+             'Uncategorizedcategories',
+             'Uncategorizedimages',
+             'Uncategorizedpages',
+             'Uncategorizedtemplates',
+             'Unusedimages',
+             'Unusedtemplates',
+             'Wantedfiles',
+             'Wantedpages',
+             'Wantedtemplates',
+             'Watchlist',
+             'Withoutinterwiki'
+             ) as $i ) {
+             unset( $list[$i] );
+         }
+     }
+     return true;
+ }
+ $wgHooks['SpecialPage_initList'][]='disableSomeSpecialPages';
+…
+
 More documentation is at 
  https://www.mediawiki.org/wiki/Help:Extension:AccessControl
 
@@ -47,3 +156,10 @@ More documentation is at
 
 5, Try include page over DPL (if used it)
 
+6, Try get content from self-protected page by find
+
+7, Try get content from protected page by random diff
+
+    http://server/wiki/index.php?title=blabla&diff=123
+
+NOTE: Redirect is in beta version code deactivated!!!

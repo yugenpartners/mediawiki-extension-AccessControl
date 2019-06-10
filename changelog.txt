@@ -3,6 +3,10 @@ version 3.0-beta
 * New syntax for accesslists
 * Used hook "ParserBeforeStrip" to secure content of pages included by DPL
 * Used hook "ModifyExportQuery" to protection page before export
+* Used hook "ShowSearchHit" to hide results of pages with hits
+* Used hook "GetDifferenceEngine" do now redirect the anonymous user if try get content of protected pages by random diff
+* Removed hook:
+    UnknownAction
 * New variables:
     $wgAccessControlNamespaces
 
