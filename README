@@ -1,10 +1,35 @@
 
 == Instalation == 
-For very very quick start add the following to LocalSettings.php:
+For very very quick start:
 
- wfLoadExtension( 'AccessControl' )
+1, Get source from tarball or git repository, and insert into directory
+   extensions/AccessControl your instance of MediaWiki
 
-== Config ==
+2, Before activation extension you must set in your file LocalSettings.php
+   restricted access for the anonymous users (see below)
+
+3, And after you may add into your file LocalSettings.php the following
+   line:
+
+    wfLoadExtension( 'AccessControl' )
+
+This is moment is AccessControl activated and may be use to protect of pages.
+
+== Using ==
+
+Complet manual for using is in file AccessControl.cs.xml, which can be
+imported into your wiki. For now is to disposition only version in czech
+language (exported from TheWoodcraft.Org page) , but I hope than will
+soon be available translate of this content into the english.
+
+If you want participated on it, you can request for access into my wiki.
+
+See
+ https://www.thewoodcraft.org/wiki/AccessControl
+ https://www.mediawiki.org/wiki/Extension:AccessControl
+ https://www.mediawiki.org/wiki/Help:Extension:AccessControl (planned)
+
+== Basic config settings before activation ==
 First you set allow action 'view' for all users:
 
  $wgGroupPermissions['*']['read']            = true;
@@ -135,31 +160,3 @@ CAUTION: Is strictly recommend set deny access for allmost of Special
  }
  $wgHooks['SpecialPage_initList'][]='disableSomeSpecialPages';
 …
-
-More documentation is at 
- https://www.mediawiki.org/wiki/Help:Extension:AccessControl
-
-=== Global variables used by AccessControl ===
-; $wgAccessControlNamespaces : Array. By default is not set. Respectively use array <code>[ 0, 12, 13 ]</code>
-::0 - NS_MAIN
-::12 - NS_USER
-::13 - NS_USER_TALK
-
-== How to test ==
-1, Create first self-protect page and try access over link for authorized user, and next for anonymous user (is recommend use two browsers for it)
-
-2, Try access to self-protected page by redirect.
-
-3, Try access by transclusion self-protected page into another page
-
-4, Try create self-protect template and use it
-
-5, Try include page over DPL (if used it)
-
-6, Try get content from self-protected page by find
-
-7, Try get content from protected page by random diff
-
-    http://server/wiki/index.php?title=blabla&diff=123
-
-NOTE: Redirect is in beta version code deactivated!!!
