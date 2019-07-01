@@ -2,6 +2,7 @@
 
 class AccessControlHooks {
 
+
 	/**
 	 * Tag <accesscontrol> must be registered to the Parser. It is need,
 	 *  because if the tag not in register, can't be replaced content of
@@ -121,7 +122,7 @@ class AccessControlHooks {
 		}
 		self::anonymousDeny();
 		$rights = self::allRightTags( $text );
-		if ( ! ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) ) {
+		if ( ! ( empty( $rights[VIEW] ) && empty( $rights[EDIT] ) ) ) {
 			switch ( self::testRightsArray( $rights ) ) {
 				case 1 :
 					// chunk is without protection
@@ -183,7 +184,7 @@ class AccessControlHooks {
 			$page = $result->getTitle();
 			$content = self::getContentPage( $page->mNamespace, $page->mTextform );
 			$rights = self::allRightTags( $content );
-			if ( !( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) ) {
+			if ( !( empty( $rights[VIEW] ) && empty( $rights[EDIT] ) ) ) {
 				switch ( self::testRightsArray( $rights ) ) {
 					case 1 :
 					case 2 :
@@ -258,6 +259,20 @@ class AccessControlHooks {
 		$string
 		) {
 		global $wgAccessControlNamespaces;
+		if ( ! defined('PREG_UNMATCHED_AS_NULL') ) {
+			// Constant is predefined from PHP versio 7.2.0
+			define( 'PREG_UNMATCHED_AS_NULL', 512 );
+		}
+		if ( ! defined('PROTECTEDBY') ) {
+			define( 'PROTECTEDBY', 'isProtectedBy' );
+			define( 'READGROUPS', 'readOnlyAllowedGroups' );
+			define( 'EDITGROUPS', 'editAllowedGroups' );
+			define( 'READERS', 'readOnlyAllowedUsers' );
+			define( 'VIEW', 'visitors' );
+			define( 'EDITORS', 'editAllowedUsers' );
+			define( 'EDIT', 'editors' );
+		}
+
 //		self::printDebug( $string ); // INFO DEBUG input string is raw content of page
 		/* Redirect */
 		preg_match(
@@ -275,7 +290,7 @@ class AccessControlHooks {
 //				self::printDebug($rights); // INFO DEBUG
 			}
 		}
-		$allow = [ 'editors' => [], 'visitors' => [] ];
+		$allow = [ EDIT => [], VIEW => [] ];
 		preg_match_all(
 			'/(?J)(?<match>\{\{[^\}]+(.*)\}\})|(?<match>\<accesscontrol\>(.*)\<\/accesscontrol\>)/',
 			$string,
@@ -366,46 +381,48 @@ class AccessControlHooks {
 					break;
 				default :
 					if (
-						strpos( $pattern, 'isProtectedBy') ||
-						strpos( $pattern, 'readOnlyAllowedUsers') ||
-						strpos( $pattern, 'editAllowedUsers') ||
-						strpos( $pattern, 'readOnlyAllowedGroups') ||
-						strpos( $pattern, 'editAllowedGroups')
+//						strpos( $pattern, 'isProtectedBy') ||
+						strpos( $pattern, PROTECTEDBY ) ||
+						strpos( $pattern, READERS) ||
+						strpos( $pattern, EDITORS) ||
+						strpos( $pattern, READGROUPS) ||
+						strpos( $pattern, EDITGROUPS)
 					   ) {
 						/* Protected by options */
 						$options = array_map( 'trim', explode( '|' , $pattern ) );
 						foreach ( $options as $string ) {
+//							self::printDebug($string); // INFO DEBUG
 							if ( is_integer( strpos( $string, 'isProtectedBy' ) ) ) {
 								/* page is protected by list of users */
 								$groups = self::membersOfGroup($string);
-								if ( array_key_exists( 'isProtectedBy', $groups) ) {
-									foreach ( $groups['isProtectedBy'] as $group ) {
+								if ( array_key_exists( PROTECTEDBY, $groups) ) {
+									foreach ( $groups[PROTECTEDBY] as $group ) {
 										$accesslist = self::getAccessListCanonicalTarget( $group );
 //										self::printDebug( $accesslist ); // INFO DEBUG
 										if ( $accesslist['ns'] == 0 ) {
 											foreach ($wgAccessControlNamespaces as $ns) {
 												$array = self::getContentPageNew( $group, $ns);
-												if ( array_key_exists( 'editors', $array) ) {
-													foreach( array_keys($array['editors']) as $user) {
-														$allow['editors'][$user] = true;
+												if ( array_key_exists( EDIT, $array) ) {
+													foreach( array_keys($array[EDIT]) as $user) {
+														$allow[EDIT][$user] = true;
 													}
 												}
-												if ( array_key_exists( 'visitors', $array) ) {
-													foreach( array_keys($array['visitors']) as $user) {
-														$allow['visitors'][$user] = true;
+												if ( array_key_exists( VIEW, $array) ) {
+													foreach( array_keys($array[VIEW]) as $user) {
+														$allow[VIEW][$user] = true;
 													}
 												}
 											}
 										} else {
 											$array = self::getContentPageNew( $accesslist['title'], $accesslist['ns'] );
-											if ( array_key_exists( 'editors', $array) ) {
-												foreach( array_keys($array['editors']) as $user) {
-													$allow['editors'][$user] = true;
+											if ( array_key_exists( EDIT, $array) ) {
+												foreach( array_keys($array[EDIT]) as $user) {
+													$allow[EDIT][$user] = true;
 												}
 											}
-											if ( array_key_exists( 'visitors', $array) ) {
-												foreach( array_keys($array['visitors']) as $user) {
-													$allow['visitors'][$user] = true;
+											if ( array_key_exists( VIEW, $array) ) {
+												foreach( array_keys($array[VIEW]) as $user) {
+													$allow[VIEW][$user] = true;
 												}
 											}
 										}
@@ -414,39 +431,39 @@ class AccessControlHooks {
 /* isProtectedBy */
 //								self::printDebug( $allow ); // INFO DEBUG
 							}
-							if ( is_integer( strpos ( $string, 'readOnlyAllowedGroups' ) ) || is_integer( strpos ( $string, 'readOnlyAllowedUsers' ) ) ) {
+							if ( is_integer( strpos ( $string, READGROUPS ) ) || is_integer( strpos ( $string, READERS ) ) ) {
 								/* readonly access - stronger then rights from isProtectedby */
 								$readers = self::membersOfGroup($string);
-								if ( array_key_exists( 'readOnlyAllowedGroups', $readers ) ) {
-									foreach( $readers['readOnlyAllowedGroups'] as $group ) {
+								if ( array_key_exists( READGROUPS, $readers ) ) {
+									foreach( $readers[READGROUPS] as $group ) {
 										$accesslist = self::getAccessListCanonicalTarget( $group );
 //										self::printDebug( $accesslist ); // INFO DEBUG
 										if ( $accesslist['ns'] == 0 ) {
 											foreach ($wgAccessControlNamespaces as $ns) {
 												$array = self::getContentPageNew( $group, $ns);
-												if ( array_key_exists( 'editors', $array) ) {
-													foreach( array_keys($array['editors']) as $user) {
-														$allow['editors'][$user] = false;
-														$allow['visitors'][$user] = true;
+												if ( array_key_exists( EDIT, $array) ) {
+													foreach( array_keys($array[EDIT]) as $user) {
+														$allow[EDIT][$user] = false;
+														$allow[VIEW][$user] = true;
 													}
 												}
-												if ( array_key_exists( 'visitors', $array) ) {
-													foreach( array_keys($array['visitors']) as $user) {
-														$allow['visitors'][$user] = true;
+												if ( array_key_exists( VIEW, $array) ) {
+													foreach( array_keys($array[VIEW]) as $user) {
+														$allow[VIEW][$user] = true;
 													}
 												}
 											}
 										} else {
 											$array = self::getContentPageNew( $accesslist['title'], $accesslist['ns']);
-											if ( array_key_exists( 'editors', $array) ) {
-												foreach( array_keys($array['editors']) as $user) {
-													$allow['editors'][$user] = false;
-													$allow['visitors'][$user] = true;
+											if ( array_key_exists( EDIT, $array) ) {
+												foreach( array_keys($array[EDIT]) as $user) {
+													$allow[EDIT][$user] = false;
+													$allow[VIEW][$user] = true;
 												}
 											}
-											if ( array_key_exists( 'visitors', $array) ) {
-												foreach( array_keys($array['visitors']) as $user) {
-													$allow['visitors'][$user] = true;
+											if ( array_key_exists( VIEW, $array) ) {
+												foreach( array_keys($array[VIEW]) as $user) {
+													$allow[VIEW][$user] = true;
 												}
 											}
 										}
@@ -455,43 +472,43 @@ class AccessControlHooks {
 /*  readOnlyAllowedGroups */
 //								self::printDebug( $allow ); // INFO DEBUG
 								/* readonly access - stronger then rights from isProtectedby */
-								if ( array_key_exists( 'readOnlyAllowedUsers', $readers ) ) {
-									foreach( $readers['readOnlyAllowedUsers'] as $user ) {
-										if ( array_key_exists('editors', $allow) ) {
-											if ( array_key_exists( $user, $allow['editors'] ) ) {
+								if ( array_key_exists( READERS, $readers ) ) {
+									foreach( $readers[READERS] as $user ) {
+										if ( array_key_exists( EDIT, $allow ) ) {
+											if ( array_key_exists( $user, $allow[EDIT] ) ) {
 												/* vypínám právo k editaci */
-												$allow['editors'][$user] = false;
+												$allow[EDIT][$user] = false;
 											}
 										}
-										if ( array_key_exists('visitors', $allow) ) {
-											$allow['visitors'][$user] = true;
+										if ( array_key_exists(VIEW, $allow) ) {
+											$allow[VIEW][$user] = true;
 										}
 									}
 								}
 /* readOnlyAllowedUsers */
 //								self::printDebug( $allow ); // INFO DEBUG
 							}
-							if ( is_integer( strpos( $string, 'editAllowedUsers' ) ) || is_integer( strpos( $string, 'editAllowedGroups' ) ) ) {
+							if ( is_integer( strpos( $string, EDITORS ) ) || is_integer( strpos( $string, EDITGROUPS ) ) ) {
 								/* edit access - stronger then rights from isProtectedby, and rights from readonly options */
 								$editors = self::membersOfGroup($string);
-								if ( array_key_exists( 'editAllowedGroups', $editors ) ) {
-									foreach( $editors['editAllowedGroups'] as $group ) {
+								if ( array_key_exists( EDITGROUPS, $editors ) ) {
+									foreach( $editors[EDITGROUPS] as $group ) {
 										$accesslist = self::getAccessListCanonicalTarget( $group );
 //										self::printDebug( $accesslist ); // INFO DEBUG
 										if ( $accesslist['ns'] == 0 ) {
 											foreach ($wgAccessControlNamespaces as $ns) {
 												$array = self::getContentPageNew( $group, $ns);
-												if ( array_key_exists( 'visitors', $array) ) {
-													foreach( array_keys($array['visitors']) as $user) {
-														$allow['editors'][$user] = true;
+												if ( array_key_exists( VIEW, $array) ) {
+													foreach( array_keys($array[VIEW]) as $user) {
+														$allow[EDIT][$user] = true;
 													}
 												}
 											}
 										} else {
 											$array = self::getContentPageNew( $accesslist['title'], $accesslist['ns']);
-											if ( array_key_exists( 'visitors', $array) ) {
-												foreach( array_keys($array['visitors']) as $user) {
-													$allow['editors'][$user] = true;
+											if ( array_key_exists( VIEW, $array) ) {
+												foreach( array_keys($array[VIEW]) as $user) {
+													$allow[EDIT][$user] = true;
 												}
 											}
 										}
@@ -499,10 +516,10 @@ class AccessControlHooks {
 /* editAllowedGroups */
 //								self::printDebug( $allow ); // INFO DEBUG
 								}
-								if ( array_key_exists( 'editAllowedUsers', $editors ) ) {
+								if ( array_key_exists( EDITORS, $editors ) ) {
 									/* přidat do seznam editorů */
-									foreach( $editors['editAllowedUsers'] as $user ) {
-										$allow['editors'][$user] = true;
+									foreach( $editors[EDITORS] as $user ) {
+										$allow[EDIT][$user] = true;
 									}
 								}
 /* editAllowedUsers */
@@ -513,21 +530,29 @@ class AccessControlHooks {
 /* Array of rights is set by template options */
 //						self::printDebug( $allow ); // INFO DEBUG
 					} elseif ( strpos( $pattern, 'accesscontrol') > 0 ) {
-						/* Test first item of template with accesscontrol string in name - it is same alternative without tag */
-						$retezec = trim( substr( $pattern, strpos( $pattern, '|' ) + 1 ) );
-						if ( strpos( $retezec, '|' ) ) {
-							$members = trim( substr( $retezec, 0, strpos( $retezec, '|' ) ) );
-						} else {
-							if ( strpos( $retezec, '}' ) ) {
-								$members = trim( substr( $retezec, 0, strpos( $retezec, '}' ) ) );
+						/* If is string accesscontrol in $pattern before bar,
+						 *  it's a part of template name and the content of
+						 *  the first parameter of this template is accepted
+						 *  as alternative syntax for tag accesscontrol.
+						 */
+//						self::printDebug($pattern); // INFO DEBUG
+						$pos = ( strpos( $pattern, '|' ) );
+						if ( $pos > strpos( $pattern, 'accesscontrol') ) {
+							$retezec = trim( substr( $pattern, $pos + 1 ) );
+							if ( strpos( $retezec, '|' ) ) {
+								$members = trim( substr( $retezec, 0, strpos( $retezec, '|' ) ) );
+							} else {
+								if ( strpos( $retezec, '}' ) ) {
+									$members = trim( substr( $retezec, 0, strpos( $retezec, '}' ) ) );
+								}
 							}
-						}
-						if ( !strpos( $members, '=') ) {
-							/* {{Someone template name with accesscontrol string | accesslist_X, userA, userB | option = … }} */
-							$allow = self::earlySyntaxOfRights( $members );
-						}
+							if ( !strpos( $members, '=') ) {
+								/* {{Template name with accesscontrol string | accesslist_X, userA, userB | option = … }} */
+								$allow = self::earlySyntaxOfRights( $members );
+							}
 /* Array of members is generated by first parameter of template with accesscontrol string in name */
 //						self::printDebug( $allow ); // INFO DEBUG
+						}
 					}
 			}
 		}
@@ -626,7 +651,7 @@ class AccessControlHooks {
 				$match[1],
 				$match[2]
 			) );
-			if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
+			if ( empty( $rights[VIEW] ) && empty( $rights[EDIT] ) ) {
 				/* page is free */
 //				self::printDebug( microtime(true) . ' controlExportPage view'); // INFO DEBUG TIMESTAMP
 				return 1;
@@ -645,7 +670,7 @@ class AccessControlHooks {
 //				self::printDebug( microtime(true) . ' controlExportPage anonymous'); // INFO DEBUG TIMESTAMP
 				return false;
 			}
-			if ( array_key_exists( $wgUser->mName, $rights['editors'] ) || array_key_exists( $wgUser->mName, $rights['visitors'] ) ) {
+			if ( array_key_exists( $wgUser->mName, $rights[EDIT] ) || array_key_exists( $wgUser->mName, $rights[VIEW] ) ) {
 				/* readonly user */
 //				self::printDebug( microtime(true) . ' controlExportPage readonly user'); // INFO DEBUG TIMESTAMP
 				return 2;
@@ -718,7 +743,7 @@ class AccessControlHooks {
 		Nezkoumají se všechna jména.
 		Výsledek se vrací ihned po nastavení
 		*/
-		$allow = [ 'editors' => [], 'visitors' => [] ];
+		$allow = [ EDIT => [], VIEW => [] ];
 		$MWgroups = User::getAllGroups();
 		foreach( explode( ',', $string ) as $title ) {
 			//zkontrolovat, jestli není readonly
@@ -739,9 +764,9 @@ class AccessControlHooks {
 									    /* Nemá smysl zjišťovat všechny skupiny. Stačí zjistit, jestli do ní patří aktuální uživatel a přidat ho
 									    */
 										if ( $item[1] ) {
-											$allow[ 'editors' ][ $wgUser->mName ] = true;
+											$allow[EDIT][ $wgUser->mName ] = true;
 										} else {
-											$allow[ 'visitors' ][ $wgUser->mName ] = true;
+											$allow[VIEW][ $wgUser->mName ] = true;
 										}
 									}
 								}
@@ -751,33 +776,33 @@ class AccessControlHooks {
 						if ( $item[0] === $wgUser->mName ) {
 							/* Username */
 							if ( $item[1] ) {
-								$allow[ 'editors' ][ $wgUser->mName ] = true;
+								$allow[EDIT][ $wgUser->mName ] = true;
 							} else {
-								$allow[ 'visitors' ][ $wgUser->mName ] = true;
+								$allow[VIEW][ $wgUser->mName ] = true;
 							}
 						}
 						if ( $item[1] ) {
-							$allow[ 'editors' ][ $item[0] ] = true;
+							$allow[EDIT][ $item[0] ] = true;
 						} else {
-							$allow[ 'visitors' ][ $item[0] ] = true;
+							$allow[VIEW][ $item[0] ] = true;
 						}
 					} else {
-						if ( array_key_exists( 'editors', $array ) ) {
+						if ( array_key_exists( EDIT, $array ) ) {
 							if ( $item[1] ) {
-								foreach( array_keys( $array[ 'editors' ] ) as $user ) {
-									$allow[ 'editors' ][ $user ] = true;
+								foreach( array_keys( $array[EDIT] ) as $user ) {
+									$allow[EDIT][ $user ] = true;
 								}
 							} else {
 								/* (ro) */
-								foreach( array_keys( $array[ 'editors' ] ) as $user ) {
-									$allow[ 'editors' ][ $user ] = false;
-									$allow[ 'visitors' ][ $user ] = true;
+								foreach( array_keys( $array[EDIT] ) as $user ) {
+									$allow[EDIT][ $user ] = false;
+									$allow[VIEW][ $user ] = true;
 								}
 							}
 						}
-						if ( array_key_exists( 'visitors', $array ) ) {
-							foreach( array_keys( $array[ 'visitors' ] ) as $user ) {
-								$allow[ 'visitors' ][ $user ] = true;
+						if ( array_key_exists( VIEW, $array ) ) {
+							foreach( array_keys( $array[VIEW] ) as $user ) {
+								$allow[VIEW][ $user ] = true;
 							}
 						}
 					}
@@ -785,6 +810,7 @@ class AccessControlHooks {
 //				self::printDebug( $allow ); // INFO DEBUG
 			}
 		}
+//		self::printDebug( $allow ); // INFO DEBUG
 		return $allow;
 	}
 
@@ -996,53 +1022,80 @@ class AccessControlHooks {
 		if ( is_array($usersAccess) ) {
 			foreach ( $usersAccess as $userEntry ) {
 				$item = trim($userEntry);
-				if ( substr( $userEntry, 0, 21) === 'readOnlyAllowedGroups' ) {
+				if ( substr( $userEntry, 0, 21) === READGROUPS ) {
 					$visitorsGroup = self::membersOfGroup( $item );
-					foreach ( $visitorsGroup['readOnlyAllowedGroups'] as $group ) {
-						$array = self::testRightsOfMember( $group );
-						if ( array_key_exists( 'editors', $array) ) {
-							foreach( array_keys($array['editors']) as $user) {
-								$allow['editors'][$user] = false;
-							}
-						}
-						if ( array_key_exists( 'visitors', $array) ) {
-							foreach( array_keys($array['visitors']) as $user) {
-								$allow['visitors'][$user] = true;
-							}
-						}
-					}
+					self::appendMembers( $allow, $visitorsGroup, READGROUPS, false );
 				}
-				if ( substr( $userEntry, 0, 17) === 'editAllowedGroups' ) {
+				if ( substr( $userEntry, 0, 17) === EDITGROUPS ) {
 					$editorsGroup = self::membersOfGroup( $item );
-					foreach ( $editorsGroup['editAllowedGroups'] as $group ) {
-						$array = self::testRightsOfMember( $group );
-						if ( array_key_exists( 'editors', $array) ) {
-							foreach( array_keys($array['editors']) as $user) {
-								$allow['editors'][$user] = true;
-							}
-						}
-						if ( array_key_exists( 'visitors', $array) ) {
-							foreach( array_keys($array['visitors']) as $user) {
-								$allow['visitors'][$user] = true;
-							}
-						}
-					}
+					self::appendMembers( $allow, $editorsGroup, EDITGROUPS );
 				}
-				if ( substr( $userEntry, 0, 20) === 'readOnlyAllowedUsers' ) {
+				if ( substr( $userEntry, 0, 20) === READERS ) {
 					$visitors = self::membersOfGroup( $item );
-					foreach ( $visitors['readOnlyAllowedUsers'] as $user ) {
-						$allow['visitors'][$user] = true;
-					}
+					self::appendUsers( $allow, $visitors, READERS, VIEW );
 				}
-				if ( substr( $userEntry, 0, 16) === 'editAllowedUsers' ) {
+				if ( substr( $userEntry, 0, 16) === EDITORS ) {
 					$editors = self::membersOfGroup( $item );
-					foreach ( $editors['editAllowedUsers'] as $user ) {
-						$allow['editors'][$user] = true;
-					}
+					self::appendUsers( $allow, $editors, EDITORS, EDIT );
 				}
 			}
 		}
 		return $allow;
+	}
+
+
+	/**
+	 * Function add into rights array the members of groups
+	 *
+	 * @param array &$allow 
+	 * @param array $array
+	 * @param string $param
+	 * @param bool $edit
+	 */
+	private static function appendMembers( &$allow, $array, $param, $edit = true ) {
+		global $wgRequest;
+		$title = $wgRequest->getText('title');
+		if ( ! empty ( $array ) ) {
+			foreach ( $array[$param] as $group ) {
+				if ( $group != $title ) {
+					$members = self::testRightsOfMember( $group );
+					if ( array_key_exists( EDIT, $members ) ) {
+						foreach( array_keys( $members[EDIT] ) as $item ) {
+							if ( strlen( $item ) > 1 ) {
+								$allow[EDIT][$item] = $edit;
+							}
+						}
+					}
+					if ( array_key_exists( VIEW, $members ) ) {
+						foreach( array_keys($members[VIEW]) as $item ) {
+							if ( strlen( $item ) > 1 ) {
+								$allow[EDIT][$item] = true;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+
+	/**
+	 * Function add the users into rights array
+	 *
+	 * @param array &$allow 
+	 * @param array $array
+	 * @param string $param
+	 * @param string $group visitors pr editors
+	 * @param bool $edit
+	 */
+	private static function appendUsers( &$allow, $array, $param, $group, $bool = true ) {
+		if ( ! empty ( $array ) ) {
+			foreach ( $array[$param] as $item ) {
+				if ( strlen( $item ) > 1 ) {
+					$allow[$group][$item] = $bool;
+				}
+			}
+		}
 	}
 
 
@@ -1062,12 +1115,12 @@ class AccessControlHooks {
 				if ( strpos( $userEntry, "(ro)" ) === false ) {
 					$user = trim( str_replace( "*", "", $userEntry ) );
 					if ( self::isUser($user) ) {
-						$allow['editors'][$user] = true;
+						$allow[EDIT][$user] = true;
 					}
 				} else {
 					$user = trim( str_replace( "(ro)", "", str_replace( "*", "", $userEntry ) ) );
 					if ( self::isUser($user) ) {
-						$allow['visitors'][$user] = true;
+						$allow[VIEW][$user] = true;
 					}
 				}
 			}
@@ -1145,7 +1198,7 @@ class AccessControlHooks {
 	 */
 	private static function testRightsArray ( $rights ) {
 		global $wgUser, $wgAdminCanReadAll;
-		if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
+		if ( empty( $rights[VIEW] ) && empty( $rights[EDIT] ) ) {
 			/* stránka je bez ochrany */
 			return 1;
 		}
@@ -1157,8 +1210,8 @@ class AccessControlHooks {
 				}
 			}
 		}
-		if ( array_key_exists( $wgUser->mName, $rights['editors'] ) || array_key_exists( $wgUser->mName, $rights['visitors'] ) ) {
-			if ( array_key_exists( $wgUser->mName, $rights['editors'] ) && $rights['editors'][$wgUser->mName] ) {
+		if ( array_key_exists( $wgUser->mName, $rights[EDIT] ) || array_key_exists( $wgUser->mName, $rights[VIEW] ) ) {
+			if ( array_key_exists( $wgUser->mName, $rights[EDIT] ) && $rights[EDIT][$wgUser->mName] ) {
 				return 1;
 			} else {
 				/* uživatel může číst obsah */
@@ -1189,9 +1242,9 @@ class AccessControlHooks {
 			if ( $accesslistpage[ 'ns' ] === 2 ) {
 				//netřeba dál chodit, je to user
 				if ( $item[1] ) {
-					$allow[ 'editors' ][ $accesslistpage['title'] ] = true;
+					$allow[EDIT][ $accesslistpage['title'] ] = true;
 				} else {
-					$allow[ 'visitors' ][ $accesslistpage['title'] ] = true;
+					$allow[VIEW][ $accesslistpage['title'] ] = true;
 				}
 			} else {
 				/* extrakce obsahu seznamu (předává se jmenný prostor a jméno seznamu) */
@@ -1214,7 +1267,7 @@ class AccessControlHooks {
 	*/
 	private static function userVerify( $rights ) {
 		global $wgUser, $wgActions, $wgAdminCanReadAll, $wgAccessControlInfo, $wgRequest;
-		if ( empty( $rights['visitors'] ) && empty( $rights['editors'] ) ) {
+		if ( empty( $rights[VIEW] ) && empty( $rights[EDIT] ) ) {
 			/* page is without limits */
 			return true;
 		} else {
@@ -1237,18 +1290,18 @@ class AccessControlHooks {
 					}
 				}
 			}
-			if ( array_key_exists( 'editors', $rights ) ) {
-				if ( array_key_exists( $wgUser->mName, $rights['editors'] ) ) {
-					if ( $rights['editors'][$wgUser->mName] ) {
+			if ( array_key_exists( EDIT, $rights ) ) {
+				if ( array_key_exists( $wgUser->mName, $rights[EDIT] ) ) {
+					if ( $rights[EDIT][$wgUser->mName] ) {
 //						self::printDebug( microtime(true) . ' userVerify - ' . $wgUser->mName . ' is  editor' ); // DEBUG TIMESTAMP
 						return true;
 					}
 				}
 			}
-			if ( array_key_exists( 'visitors' , $rights ) ) {
+			if ( array_key_exists( VIEW, $rights ) ) {
 				self::readOnlyUser();
-				if ( array_key_exists( $wgUser->mName, $rights['editors'] ) || array_key_exists( $wgUser->mName, $rights['visitors'] ) ) {
-					if ( $rights['visitors'][$wgUser->mName] ) {
+				if ( array_key_exists( $wgUser->mName, $rights[EDIT] ) || array_key_exists( $wgUser->mName, $rights[VIEW] ) ) {
+					if ( $rights[VIEW][$wgUser->mName] ) {
 //						self::printDebug( microtime(true) . ' userVerify - ' . $wgUser->mName . ' is visitor' ); // DEBUG TIMESTAMP
 						return true;
 					} else {

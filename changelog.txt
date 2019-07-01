@@ -1,4 +1,4 @@
-version 3.0-pre
+version 3.0
 * Completly rewrited for templates support by Aleš Kapica
 * New syntax for accesslists
 * Old syntax is still supported
