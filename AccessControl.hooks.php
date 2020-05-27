@@ -1169,7 +1169,7 @@ class AccessControlHooks {
 	 *  for current user only to read.
 	 */
 	private static function readOnlyUser() {
-		global $wgActions, $wgUser, $wgReadOnlyUser;
+		global $wgActions, $wgUser, $wgReadOnlyUser, $wgOut;
 		if ( ! $wgReadOnlyUser ) {
 			$wgActions['edit'] = false;
 			$wgActions['history'] = false;
@@ -1183,6 +1183,10 @@ class AccessControlHooks {
 			$wgActions['markpatrolled'] = false;
 			$wgActions['formedit'] = false;
 //			self::printDebug( microtime(true) . ' readOnlyUser variable $wgReadOnlyUser is set true' ); // DEBUG TIMESTAMP
+			$wgOut->addInlineScript( "document.getElementById('ca-history') && document.getElementById('ca-history').parentNode.removeChild(document.getElementById('ca-history'));" );
+			$wgOut->addInlineScript( "document.getElementById('ca-edit') && document.getElementById('ca-edit').parentNode.removeChild(document.getElementById('ca-edit'));" );
+			$wgOut->addInlineScript( "document.getElementById('ca-ve-edit') && document.getElementById('ca-ve-edit').parentNode.removeChild(document.getElementById('ca-ve-edit'));" );
+			$wgOut->addInlineScript( "Array.from(document.getElementsByClassName('mw-editsection')).map(element => element.parentNode.removeChild(element));" );
 			$wgReadOnlyUser = true;
 		}
 		return;
@@ -1302,8 +1306,13 @@ class AccessControlHooks {
 				self::readOnlyUser();
 				if ( array_key_exists( $wgUser->mName, $rights[EDIT] ) || array_key_exists( $wgUser->mName, $rights[VIEW] ) ) {
 					if ( $rights[VIEW][$wgUser->mName] ) {
-//						self::printDebug( microtime(true) . ' userVerify - ' . $wgUser->mName . ' is visitor' ); // DEBUG TIMESTAMP
-						return true;
+						if (  $wgRequest->getText( 'veaction' ) ) {
+//							self::printDebug( microtime(true) . ' userVerify - ' . $wgUser->mName . ' is visitor by visual editor' ); // DEBUG TIMESTAMP
+							return self::doRedirect( 'accesscontrol-redirect-users' );
+						} else {
+//							self::printDebug( microtime(true) . ' userVerify - ' . $wgUser->mName . ' is visitor' ); // DEBUG TIMESTAMP
+							return true;
+						}
 					} else {
 //						self::printDebug( microtime(true) . ' userVerify - unauthorized user ' . $wgUser->mName ); // DEBUG TIMESTAMP
 						$wgActions['view'] = false;

@@ -1,3 +1,7 @@
+version 3.0.1
+* Patch for deny edit access over visualeditor, proposed by user HtheChemist and tested by
+  Nicolas Nallet with MediaWiki 1.34.0
+
 version 3.0
 * Completly rewrited for templates support by Aleš Kapica
 * New syntax for accesslists
